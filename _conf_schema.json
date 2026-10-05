@@ -171,6 +171,265 @@
             }
         }
     },
+    "media_randomizer": {
+        "description": "X 图片随机预处理",
+        "type": "object",
+        "items": {
+            "enabled": {
+                "description": "启用X图片随机预处理",
+                "type": "bool",
+                "hint": "仅作用于 X 下载的图片：发送前对每张图做轻微随机改动并重新编码，降低跨群转发图片的一致性。动图（GIF/动画WebP/APNG）始终使用原文件。",
+                "default": true
+            },
+            "weight_reencode": {
+                "description": "重编码权重",
+                "type": "int",
+                "hint": "仅重新编码（分辨率与格式不变）的相对权重，0 为停用。各策略权重为相对值，不要求合计为 100。",
+                "default": 30,
+                "min": 0,
+                "max": 1000
+            },
+            "weight_border": {
+                "description": "加边框权重",
+                "type": "int",
+                "hint": "四周增加 1~3px 黑/白边框的相对权重，0 为停用。",
+                "default": 20,
+                "min": 0,
+                "max": 1000
+            },
+            "weight_crop": {
+                "description": "裁边权重",
+                "type": "int",
+                "hint": "随机选择一条边裁掉 1~2px 的相对权重，0 为停用。",
+                "default": 15,
+                "min": 0,
+                "max": 1000
+            },
+            "weight_canvas": {
+                "description": "扩展画布权重",
+                "type": "int",
+                "hint": "宽、高各增加 1~6px 并随机放置原图的相对权重，0 为停用。",
+                "default": 15,
+                "min": 0,
+                "max": 1000
+            },
+            "weight_edge_noise": {
+                "description": "边缘涂色噪声权重",
+                "type": "int",
+                "hint": "在外侧边缘区域随机涂 2~20 个黑/白像素的相对权重，0 为停用。",
+                "default": 10,
+                "min": 0,
+                "max": 1000
+            },
+            "weight_pixel_noise": {
+                "description": "像素微调噪声权重",
+                "type": "int",
+                "hint": "在外侧边缘区域随机微调 5~30 个像素（各 RGB 通道独立 ±1~3）的相对权重，0 为停用。",
+                "default": 10,
+                "min": 0,
+                "max": 1000
+            },
+            "weight_animation_skip": {
+                "description": "动图处理权重",
+                "type": "int",
+                "hint": "动图处理策略权重。当前仅支持跳过（使用原文件）。",
+                "default": 100,
+                "min": 0,
+                "max": 1000
+            },
+            "border_color": {
+                "description": "边框颜色",
+                "type": "string",
+                "hint": "边框颜色的选取方式。",
+                "default": "随机黑白",
+                "options": [
+                    "随机黑白",
+                    "黑",
+                    "白"
+                ]
+            },
+            "canvas_background": {
+                "description": "画布背景颜色",
+                "type": "string",
+                "hint": "扩展画布新增区域的背景色（不透明）。",
+                "default": "随机黑白",
+                "options": [
+                    "随机黑白",
+                    "黑",
+                    "白"
+                ]
+            },
+            "noise_color": {
+                "description": "噪声像素颜色",
+                "type": "string",
+                "hint": "边缘噪声像素的颜色，逐像素随机抽取。",
+                "default": "随机黑白",
+                "options": [
+                    "随机黑白",
+                    "黑",
+                    "白"
+                ]
+            },
+            "jpeg_quality": {
+                "description": "JPEG编码质量",
+                "type": "int",
+                "hint": "JPEG 重新编码质量（1~100），使用 4:4:4 采样。",
+                "default": 95,
+                "min": 1,
+                "max": 100
+            },
+            "webp_quality": {
+                "description": "WebP编码质量",
+                "type": "int",
+                "hint": "有损 WebP 重新编码质量（1~100）；无损 WebP 保持无损编码。",
+                "default": 95,
+                "min": 1,
+                "max": 100
+            },
+            "png_compress_level": {
+                "description": "PNG压缩级别",
+                "type": "int",
+                "hint": "PNG 重新编码压缩级别（0~9）。",
+                "default": 6,
+                "min": 0,
+                "max": 9
+            },
+            "max_modified_ratio": {
+                "description": "噪声像素比例上限",
+                "type": "float",
+                "hint": "噪声策略修改的像素数不超过总像素的该比例（(0, 1]，默认 0.1%），小图按上限自动缩减；超出范围的值会停用噪声策略。",
+                "default": 0.001,
+                "min": 0.0001,
+                "max": 1
+            },
+            "border_min_px": {
+                "description": "边框最小宽度px",
+                "type": "int",
+                "hint": "边框厚度下限。",
+                "default": 1,
+                "min": 1,
+                "max": 32
+            },
+            "border_max_px": {
+                "description": "边框最大宽度px",
+                "type": "int",
+                "hint": "边框厚度上限。",
+                "default": 3,
+                "min": 1,
+                "max": 32
+            },
+            "crop_min_px": {
+                "description": "裁边最小px",
+                "type": "int",
+                "hint": "单边裁切宽度下限。",
+                "default": 1,
+                "min": 1,
+                "max": 32
+            },
+            "crop_max_px": {
+                "description": "裁边最大px",
+                "type": "int",
+                "hint": "单边裁切宽度上限。",
+                "default": 2,
+                "min": 1,
+                "max": 32
+            },
+            "canvas_min_px": {
+                "description": "画布扩展最小px",
+                "type": "int",
+                "hint": "宽/高扩展像素下限。",
+                "default": 1,
+                "min": 1,
+                "max": 64
+            },
+            "canvas_max_px": {
+                "description": "画布扩展最大px",
+                "type": "int",
+                "hint": "宽/高扩展像素上限。",
+                "default": 6,
+                "min": 1,
+                "max": 64
+            },
+            "noise_region_px": {
+                "description": "噪声区域宽度px",
+                "type": "int",
+                "hint": "边缘噪声作用的外侧区域厚度。",
+                "default": 2,
+                "min": 1,
+                "max": 32
+            },
+            "edge_noise_min_count": {
+                "description": "涂色噪声最少像素",
+                "type": "int",
+                "hint": "单张图涂黑/白的最少像素数（实际数量受比例上限约束）。",
+                "default": 2,
+                "min": 1,
+                "max": 1000
+            },
+            "edge_noise_max_count": {
+                "description": "涂色噪声最多像素",
+                "type": "int",
+                "hint": "单张图涂黑/白的最多像素数（实际数量受比例上限约束）。",
+                "default": 20,
+                "min": 1,
+                "max": 1000
+            },
+            "pixel_noise_min_count": {
+                "description": "微调噪声最少像素",
+                "type": "int",
+                "hint": "单张图微调的最少像素数（实际数量受比例上限约束）。",
+                "default": 5,
+                "min": 1,
+                "max": 1000
+            },
+            "pixel_noise_max_count": {
+                "description": "微调噪声最多像素",
+                "type": "int",
+                "hint": "单张图微调的最多像素数（实际数量受比例上限约束）。",
+                "default": 30,
+                "min": 1,
+                "max": 1000
+            },
+            "pixel_noise_delta_min": {
+                "description": "微调幅度下限",
+                "type": "int",
+                "hint": "各 RGB 通道的最小调整量。",
+                "default": 1,
+                "min": 1,
+                "max": 128
+            },
+            "pixel_noise_delta_max": {
+                "description": "微调幅度上限",
+                "type": "int",
+                "hint": "各 RGB 通道的最大调整量。",
+                "default": 3,
+                "min": 1,
+                "max": 128
+            },
+            "cleanup_after_send": {
+                "description": "发送后立即清理副本",
+                "type": "bool",
+                "hint": "等待消息发送完成后删除本次生成的副本；关闭后由周期清理按保留时长兜底。",
+                "default": true
+            },
+            "cleanup_interval_minutes": {
+                "description": "目录清理周期(分钟)",
+                "type": "int",
+                "hint": "插件启动时清理一次预处理目录，之后按该周期清理。",
+                "default": 60,
+                "min": 5,
+                "max": 1440
+            },
+            "cleanup_retention_hours": {
+                "description": "副本保留时长(小时)",
+                "type": "int",
+                "hint": "预处理副本超过该时长后会在清理时删除（正在处理的事务文件除外）。",
+                "default": 24,
+                "min": 1,
+                "max": 720
+            }
+        }
+    },
     "xhs_settings": {
         "description": "小红书设置",
         "type": "object",

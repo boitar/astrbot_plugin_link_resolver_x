@@ -2,6 +2,12 @@
 __all__ = [
     "PLUGIN_NAME",
     "SizeLimitExceeded",
+    # 媒体随机预处理
+    "MediaPrepareContext",
+    "MediaRandomizerConfig",
+    "prepare_media",
+    "start_media_randomizer_cleaner",
+    "stop_media_randomizer_cleaner",
     # 路径获取函数
     "get_cache_path",
     "get_cookies_path",
@@ -20,9 +26,17 @@ __all__ = [
     "get_weibo_image_path",
     "get_twitter_video_path",
     "get_twitter_image_path",
+    "get_media_randomizer_path",
 ]
 
 from .exceptions import SizeLimitExceeded
+from .media_randomizer import (
+    MediaPrepareContext,
+    MediaRandomizerConfig,
+    prepare_media,
+    start_media_randomizer_cleaner,
+    stop_media_randomizer_cleaner,
+)
 from .paths import (
     PLUGIN_NAME,
     get_bili_cookies_file,
@@ -36,6 +50,7 @@ from .paths import (
     get_douyin_image_path,
     get_douyin_video_path,
     get_fonts_path,
+    get_media_randomizer_path,
     get_twitter_image_path,
     get_twitter_video_path,
     get_weibo_image_path,

@@ -14,7 +14,7 @@
 - 📕 **小红书原图解析**：支持视频、图文和 Live Photo，可下载原图并自动尝试备用地址
 - 🚦 **群过滤(黑/白名单)**：按群号控制哪些群启用解析，私聊不受影响
 - 🐦 **微博解析**：支持单条微博正文、图片、视频，默认原图优先
-- 𝕏 **X 解析**：支持 `twitter.com` / `x.com` 推文图片和视频解析
+- 𝕏 **X 解析**：支持 `twitter.com` / `x.com` 推文图片和视频解析，图片发送前默认做轻微随机预处理
 - 🧾 **摘要模式**：B站、抖音和小红书支持文字摘要或渲染卡片
 - 🔤 **字体管理**：支持自定义字体，也可按需安装托管字体
 
@@ -130,6 +130,35 @@ ffmpeg -version
 | `twitter_settings.max_media` | 单条推文最多发送媒体数 | 99 |
 | `twitter_settings.merge_send` | 单视频推文使用合并转发 | ❌ 关闭 |
 
+### X 图片随机预处理
+
+仅作用于 **X 下载的图片**：每张图在发送前做一次轻微的随机改动并重新编码（格式、分辨率与透明通道保持不变），降低同一张图被多次转发时的文件一致性。动图（GIF / 动画 WebP / APNG）始终使用原文件，处理失败或参数无效时自动回退原图，不影响发送。默认开启，可关闭。
+
+处理在下载完成后、发送前进行：副本写入插件数据目录 `temp/media_randomizer/`，消息发送完成后默认立即删除；另有启动时与每小时的兜底清理（默认删除超过 24 小时的残留副本）。
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `media_randomizer.enabled` | 启用 X 图片随机预处理 | ✅ 开启 |
+| `media_randomizer.weight_*` | 六种策略的相对权重（`reencode` / `border` / `crop` / `canvas` / `edge_noise` / `pixel_noise`），0 为停用该策略 | 30 / 20 / 15 / 15 / 10 / 10 |
+| `media_randomizer.weight_animation_skip` | 动图处理权重（当前仅支持跳过） | 100 |
+| `media_randomizer.border_color` / `canvas_background` / `noise_color` | 边框、画布背景与噪声像素的颜色：`随机黑白` / `黑` / `白` | `随机黑白` |
+| `media_randomizer.jpeg_quality` / `webp_quality` / `png_compress_level` | 重新编码质量/压缩级别（WebP 保持原有损/无损类型） | 95 / 95 / 6 |
+| `media_randomizer.max_modified_ratio` | 噪声修改像素占总像素的比例上限 | 0.001 (0.1%) |
+| `media_randomizer.*_min_px` / `*_max_px` | 边框、裁边、画布扩展的像素范围 | 见配置面板 |
+| `media_randomizer.noise_region_px` / `*_min_count` / `*_max_count` / `pixel_noise_delta_*` | 噪声作用的外侧区域宽度与像素数量、微调幅度 | 2px；2~20 / 5~30；±1~3 |
+| `media_randomizer.cleanup_after_send` | 发送完成后立即删除本次副本 | ✅ 开启 |
+| `media_randomizer.cleanup_interval_minutes` / `cleanup_retention_hours` | 兜底清理周期与副本保留时长 | 60 分钟 / 24 小时 |
+
+六种策略的含义：
+
+| 策略 | 行为 |
+|------|------|
+| `reencode` | 分辨率不变，重新编码为相同格式 |
+| `border` | 四周增加 1~3 px 边框，随机黑或白 |
+| `crop` | 随机一条边裁掉 1~2 px |
+| `canvas` | 宽、高各增加 1~6 px，原图随机放置，背景随机黑或白 |
+| `edge_noise` | 外侧 2 px 区域随机涂 2~20 个黑/白像素 |
+| `pixel_noise` | 外侧 2 px 区域随机微调 5~30 个像素（各 RGB 通道独立 ±1~3） |
 
 ---
 
@@ -157,6 +186,7 @@ ffmpeg -version
 - 纯图片推文：始终合并转发，并带文字摘要
 - 单视频推文：按 `twitter_settings.merge_send` 决定是否合并转发
 - 多视频或图文混合推文：始终合并转发，避免非合并模式下丢媒体
+- 图片默认经过随机预处理（见「X 图片随机预处理」），动图与视频不受影响
 - 当前不提供代理配置
 ---
 
@@ -180,7 +210,8 @@ astrbot_plugin_link_resolver/
 data/plugin_data/astrbot_plugin_link_resolver/
 ├── cache/               # 媒体缓存目录
 ├── cookies/             # Cookies 存放目录
-└── fonts/               # 插件托管字体目录
+├── fonts/               # 插件托管字体目录
+└── temp/media_randomizer/  # X 图片随机预处理副本目录（发送后清理）
 ```
 
 ---

@@ -19,6 +19,7 @@ from astrbot.api.event import AstrMessageEvent, MessageChain
 from astrbot.api.message_components import Image, Node, Nodes, Plain, Video
 
 from ..common import SizeLimitExceeded, get_twitter_image_path, get_twitter_video_path
+from ..common.media_randomizer import MediaPrepareContext, prepare_media
 from . import (
     TWITTER_DOWNLOAD_HEADERS,
     TwitterParseError,
@@ -186,62 +187,76 @@ class TwitterMixin:
         media_components: list[object] = []
         media_paths: list[Path] = []
         failed_media = 0
+        prepare_context = MediaPrepareContext.from_plugin(self)
 
         video_urls = result.video_urls[: self.twitter_max_media]
         remaining = max(self.twitter_max_media - len(video_urls), 0)
         image_urls = result.image_urls[:remaining]
 
-        download_start = time.perf_counter()
-        for url in video_urls:
-            try:
-                video_path = await self._download_twitter_video(url, request_id)
-                media_paths.append(video_path)
-                media_components.append(Video.fromFileSystem(str(video_path.resolve())))
-            except asyncio.CancelledError:
-                raise
-            except SizeLimitExceeded:
-                logger.warning(
-                    "⚠️ X 视频超过大小限制%s (%dMB)",
-                    source_tag,
-                    self.max_video_size_mb,
-                )
-                failed_media += 1
-            except Exception as exc:
-                failed_media += 1
-                logger.warning("⚠️ X 视频下载失败%s: %s", source_tag, str(exc))
-
-        for url in image_urls:
-            try:
-                image_path = await self._download_twitter_image(url, request_id)
-                media_paths.append(image_path)
-                media_components.append(Image.fromFileSystem(str(image_path.resolve())))
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                failed_media += 1
-                logger.warning("⚠️ X 图片下载失败%s: %s", source_tag, str(exc))
-
-        timing["download"] = time.perf_counter() - download_start
-        if not media_components:
-            logger.warning(
-                "⚠️ X 媒体下载全部失败%s, 下载耗时=%.2fs",
-                source_tag,
-                timing["download"],
-            )
-            return
-
-        is_image_post = bool(image_urls and not video_urls)
-        is_single_video = len(video_urls) == 1 and not image_urls
-        has_multi_video = len(video_urls) > 1
-        has_mixed_media = bool(video_urls and image_urls)
-        enable_merge_send = (
-            is_image_post
-            or has_multi_video
-            or has_mixed_media
-            or (is_single_video and self.twitter_merge_send)
-        )
-
         try:
+            download_start = time.perf_counter()
+            for url in video_urls:
+                try:
+                    video_path = await self._download_twitter_video(url, request_id)
+                    media_paths.append(video_path)
+                    media_components.append(
+                        Video.fromFileSystem(str(video_path.resolve()))
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except SizeLimitExceeded:
+                    logger.warning(
+                        "⚠️ X 视频超过大小限制%s (%dMB)",
+                        source_tag,
+                        self.max_video_size_mb,
+                    )
+                    failed_media += 1
+                except Exception as exc:
+                    failed_media += 1
+                    logger.warning("⚠️ X 视频下载失败%s: %s", source_tag, str(exc))
+
+            for url in image_urls:
+                try:
+                    image_path = await self._download_twitter_image(url, request_id)
+                    media_paths.append(image_path)
+                    prepared_path = await prepare_media(image_path, prepare_context)
+                    media_components.append(
+                        Image.fromFileSystem(str(prepared_path.resolve()))
+                    )
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    failed_media += 1
+                    logger.warning("⚠️ X 图片下载失败%s: %s", source_tag, str(exc))
+
+            timing["download"] = time.perf_counter() - download_start
+            if not media_components:
+                logger.warning(
+                    "⚠️ X 媒体下载全部失败%s, 下载耗时=%.2fs",
+                    source_tag,
+                    timing["download"],
+                )
+                return
+
+            if prepare_context.processed_count:
+                logger.info(
+                    "🖼️ X 图片随机预处理%s: 处理 %d 张, 耗时 %.2fs",
+                    source_tag,
+                    prepare_context.processed_count,
+                    prepare_context.elapsed_seconds,
+                )
+
+            is_image_post = bool(image_urls and not video_urls)
+            is_single_video = len(video_urls) == 1 and not image_urls
+            has_multi_video = len(video_urls) > 1
+            has_mixed_media = bool(video_urls and image_urls)
+            enable_merge_send = (
+                is_image_post
+                or has_multi_video
+                or has_mixed_media
+                or (is_single_video and self.twitter_merge_send)
+            )
+
             send_start = time.perf_counter()
             if enable_merge_send:
                 nodes = Nodes([])
@@ -273,6 +288,7 @@ class TwitterMixin:
                 total_elapsed,
             )
         finally:
+            await prepare_context.cleanup()
             if media_paths:
                 await self.cleanup_files(media_paths, [])
 

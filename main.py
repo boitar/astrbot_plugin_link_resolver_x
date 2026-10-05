@@ -16,7 +16,12 @@ from astrbot.api.event import AstrMessageEvent, filter
 from astrbot.api.star import Context, Star, register
 
 from .core.bilibili import BILI_MESSAGE_PATTERN, BilibiliMixin
-from .core.common import SizeLimitExceeded, get_bili_cookies_file
+from .core.common import (
+    SizeLimitExceeded,
+    get_bili_cookies_file,
+    start_media_randomizer_cleaner,
+    stop_media_randomizer_cleaner,
+)
 from .core.common.card_renderer import find_default_font, find_emoji_font
 from .core.common.font_manager import (
     get_managed_font_paths,
@@ -80,7 +85,15 @@ class LinkResolverPlugin(
         self._refresh_config()
 
     async def initialize(self) -> None:
-        """在后台线程安装可选字体, 避免阻塞 AstrBot 的事件循环."""
+        """启动 X 图片随机预处理目录清理任务, 并在后台线程安装可选字体."""
+        try:
+            start_media_randomizer_cleaner(
+                interval_minutes=self.media_randomizer_cleanup_interval_minutes,
+                retention_hours=self.media_randomizer_cleanup_retention_hours,
+            )
+        except Exception as exc:
+            logger.warning("⚠️ 启动 X 图片随机预处理清理任务失败: %s", str(exc))
+
         if not self.font_auto_install_enabled:
             return
 
@@ -88,6 +101,13 @@ class LinkResolverPlugin(
         self.managed_primary_font_ready = managed_paths.primary is not None
         self.managed_emoji_font_ready = managed_paths.emoji is not None
         self._refresh_config()
+
+    async def terminate(self) -> None:
+        """插件卸载时停止 X 图片随机预处理目录的周期清理任务."""
+        try:
+            await stop_media_randomizer_cleaner()
+        except Exception as exc:
+            logger.warning("⚠️ 停止 X 图片随机预处理清理任务失败: %s", str(exc))
 
     # region 配置
     def _get_config_value(self, key: str, default):
@@ -232,6 +252,89 @@ class LinkResolverPlugin(
             self._get_config_value("twitter_settings.merge_send", False)
         )
 
+        # X 图片随机预处理
+        self.media_randomizer_enabled = bool(
+            self._get_config_value("media_randomizer.enabled", True)
+        )
+        self.media_randomizer_cleanup_after_send = bool(
+            self._get_config_value("media_randomizer.cleanup_after_send", True)
+        )
+        self.media_randomizer_weights = {
+            "reencode": int(
+                self._get_config_value("media_randomizer.weight_reencode", 30)
+            ),
+            "border": int(
+                self._get_config_value("media_randomizer.weight_border", 20)
+            ),
+            "crop": int(self._get_config_value("media_randomizer.weight_crop", 15)),
+            "canvas": int(self._get_config_value("media_randomizer.weight_canvas", 15)),
+            "edge_noise": int(
+                self._get_config_value("media_randomizer.weight_edge_noise", 10)
+            ),
+            "pixel_noise": int(
+                self._get_config_value("media_randomizer.weight_pixel_noise", 10)
+            ),
+        }
+        self.media_randomizer_animation_weights = {
+            "skip": int(
+                self._get_config_value("media_randomizer.weight_animation_skip", 100)
+            )
+        }
+        self.media_randomizer_jpeg_quality = int(
+            self._get_config_value("media_randomizer.jpeg_quality", 95)
+        )
+        self.media_randomizer_webp_quality = int(
+            self._get_config_value("media_randomizer.webp_quality", 95)
+        )
+        self.media_randomizer_png_compress_level = int(
+            self._get_config_value("media_randomizer.png_compress_level", 6)
+        )
+        self.media_randomizer_max_modified_ratio = float(
+            self._get_config_value("media_randomizer.max_modified_ratio", 0.001)
+        )
+        self.media_randomizer_border_px = (
+            int(self._get_config_value("media_randomizer.border_min_px", 1)),
+            int(self._get_config_value("media_randomizer.border_max_px", 3)),
+        )
+        self.media_randomizer_crop_px = (
+            int(self._get_config_value("media_randomizer.crop_min_px", 1)),
+            int(self._get_config_value("media_randomizer.crop_max_px", 2)),
+        )
+        self.media_randomizer_canvas_px = (
+            int(self._get_config_value("media_randomizer.canvas_min_px", 1)),
+            int(self._get_config_value("media_randomizer.canvas_max_px", 6)),
+        )
+        self.media_randomizer_noise_region_px = int(
+            self._get_config_value("media_randomizer.noise_region_px", 2)
+        )
+        self.media_randomizer_edge_noise_count = (
+            int(self._get_config_value("media_randomizer.edge_noise_min_count", 2)),
+            int(self._get_config_value("media_randomizer.edge_noise_max_count", 20)),
+        )
+        self.media_randomizer_pixel_noise_count = (
+            int(self._get_config_value("media_randomizer.pixel_noise_min_count", 5)),
+            int(self._get_config_value("media_randomizer.pixel_noise_max_count", 30)),
+        )
+        self.media_randomizer_pixel_noise_delta = (
+            int(self._get_config_value("media_randomizer.pixel_noise_delta_min", 1)),
+            int(self._get_config_value("media_randomizer.pixel_noise_delta_max", 3)),
+        )
+        self.media_randomizer_border_color = str(
+            self._get_config_value("media_randomizer.border_color", "随机黑白")
+        )
+        self.media_randomizer_canvas_background = str(
+            self._get_config_value("media_randomizer.canvas_background", "随机黑白")
+        )
+        self.media_randomizer_noise_color = str(
+            self._get_config_value("media_randomizer.noise_color", "随机黑白")
+        )
+        self.media_randomizer_cleanup_interval_minutes = int(
+            self._get_config_value("media_randomizer.cleanup_interval_minutes", 60)
+        )
+        self.media_randomizer_cleanup_retention_hours = int(
+            self._get_config_value("media_randomizer.cleanup_retention_hours", 24)
+        )
+
         # 小红书配置
         self.xhs_max_media = max(
             1, int(self._get_config_value("xhs_settings.max_media", 99))
@@ -331,7 +434,7 @@ class LinkResolverPlugin(
             else "关闭"
         )
         logger.info(
-            "📹 LinkResolver 配置: 平台=%s, B站(画质=%s,合并=%s,摘要=%s,时长<=%s), 抖音(合并=%s,摘要=%s), 小红书(原图=%s,摘要=%s,大图转文件=%s), 微博(原图=%s,合并=%s,Cookie=%s), X(合并=%s,最多=%d), 字体(自动安装=%s,主字体=%s,Emoji=%s), 重试=%d",
+            "📹 LinkResolver 配置: 平台=%s, B站(画质=%s,合并=%s,摘要=%s,时长<=%s), 抖音(合并=%s,摘要=%s), 小红书(原图=%s,摘要=%s,大图转文件=%s), 微博(原图=%s,合并=%s,Cookie=%s), X(合并=%s,最多=%d,随机预处理=%s), 字体(自动安装=%s,主字体=%s,Emoji=%s), 重试=%d",
             "/".join(enabled_list) if enabled_list else "无",
             self.video_quality.name,
             "开" if self.bili_merge_send else "关",
@@ -347,6 +450,7 @@ class LinkResolverPlugin(
             "开" if self.weibo_cookie_enabled else "关",
             "开" if self.twitter_merge_send else "关",
             self.twitter_max_media,
+            "开" if self.media_randomizer_enabled else "关",
             "开" if self.font_auto_install_enabled else "关",
             "用户配置"
             if self.user_primary_font_ready

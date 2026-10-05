@@ -140,5 +140,10 @@ def get_twitter_image_path() -> Path:
     return _ensure_dir(get_twitter_cache() / "images")
 
 
+# 媒体随机预处理路径
+def get_media_randomizer_path() -> Path:
+    return _ensure_dir(_get_data_dir() / "temp" / "media_randomizer")
+
+
 # endregion
 # endregion
