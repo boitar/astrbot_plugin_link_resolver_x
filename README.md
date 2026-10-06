@@ -134,20 +134,52 @@ ffmpeg -version
 
 仅作用于 **X 下载的图片**：每张图在发送前做一次轻微的随机改动并重新编码（格式、分辨率与透明通道保持不变），降低同一张图被多次转发时的文件一致性。动图（GIF / 动画 WebP / APNG）始终使用原文件，处理失败或参数无效时自动回退原图，不影响发送。默认开启，可关闭。
 
-处理在下载完成后、发送前进行：副本写入插件数据目录 `temp/media_randomizer/`，消息发送完成后默认立即删除；另有启动时与每小时的兜底清理（默认删除超过 24 小时的残留副本）。
+处理在下载完成后、发送前进行：副本写入插件数据目录 `temp/media_randomizer/`，消息发送完成后默认立即删除；另有启动时与周期性的兜底清理（默认删除超过 24 小时的残留副本）。
+
+**开关与清理**
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
 | `media_randomizer.enabled` | 启用 X 图片随机预处理 | ✅ 开启 |
-| `media_randomizer.weight_*` | 六种策略的相对权重（`reencode` / `border` / `crop` / `canvas` / `edge_noise` / `pixel_noise`），0 为停用该策略 | 30 / 20 / 15 / 15 / 10 / 10 |
-| `media_randomizer.weight_animation_skip` | 动图处理权重（当前仅支持跳过） | 100 |
-| `media_randomizer.border_color` / `canvas_background` / `noise_color` | 边框、画布背景与噪声像素的颜色：`随机黑白` / `黑` / `白` | `随机黑白` |
-| `media_randomizer.jpeg_quality` / `webp_quality` / `png_compress_level` | 重新编码质量/压缩级别（WebP 保持原有损/无损类型） | 95 / 95 / 6 |
-| `media_randomizer.max_modified_ratio` | 噪声修改像素占总像素的比例上限 | 0.001 (0.1%) |
-| `media_randomizer.*_min_px` / `*_max_px` | 边框、裁边、画布扩展的像素范围 | 见配置面板 |
-| `media_randomizer.noise_region_px` / `*_min_count` / `*_max_count` / `pixel_noise_delta_*` | 噪声作用的外侧区域宽度与像素数量、微调幅度 | 2px；2~20 / 5~30；±1~3 |
-| `media_randomizer.cleanup_after_send` | 发送完成后立即删除本次副本 | ✅ 开启 |
-| `media_randomizer.cleanup_interval_minutes` / `cleanup_retention_hours` | 兜底清理周期与副本保留时长 | 60 分钟 / 24 小时 |
+| `media_randomizer.cleanup_after_send` | 消息发送完成后立即删除本次生成的副本；关闭后由周期清理按保留时长兜底 | ✅ 开启 |
+| `media_randomizer.cleanup_interval_minutes` | 兜底清理周期（分钟），插件启动时先清理一次 | 60 |
+| `media_randomizer.cleanup_retention_hours` | 副本保留时长（小时），超过后在下一次清理时删除（正在处理的事务文件除外） | 24 |
+
+**策略权重**（相对权重，不要求合计为 100；设为 0 停用对应策略）
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `media_randomizer.weight_reencode` | 重编码（分辨率与格式不变） | 30 |
+| `media_randomizer.weight_border` | 加边框 | 20 |
+| `media_randomizer.weight_crop` | 裁边 | 15 |
+| `media_randomizer.weight_canvas` | 扩展画布 | 15 |
+| `media_randomizer.weight_edge_noise` | 边缘涂色噪声 | 10 |
+| `media_randomizer.weight_pixel_noise` | 像素微调噪声 | 10 |
+| `media_randomizer.weight_animation_skip` | 动图处理（当前仅支持跳过，使用原文件） | 100 |
+
+**策略参数**
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `media_randomizer.border_color` | 边框颜色：`随机黑白` / `黑` / `白` | `随机黑白` |
+| `media_randomizer.canvas_background` | 扩展画布新增区域的背景色（不透明）：`随机黑白` / `黑` / `白` | `随机黑白` |
+| `media_randomizer.noise_color` | 噪声像素颜色，逐像素随机抽取：`随机黑白` / `黑` / `白` | `随机黑白` |
+| `media_randomizer.border_min_px` / `border_max_px` | 边框厚度范围（四边同厚） | 1 / 3 |
+| `media_randomizer.crop_min_px` / `crop_max_px` | 单边裁切宽度范围 | 1 / 2 |
+| `media_randomizer.canvas_min_px` / `canvas_max_px` | 宽、高各扩展的像素范围 | 1 / 6 |
+| `media_randomizer.noise_region_px` | 两种噪声作用的外侧区域厚度 | 2 |
+| `media_randomizer.edge_noise_min_count` / `edge_noise_max_count` | 单张图涂黑/白的像素数量范围 | 2 / 20 |
+| `media_randomizer.pixel_noise_min_count` / `pixel_noise_max_count` | 单张图微调的像素数量范围 | 5 / 30 |
+| `media_randomizer.pixel_noise_delta_min` / `pixel_noise_delta_max` | 微调幅度范围，各 RGB 通道独立随机加减 | 1 / 3 |
+| `media_randomizer.max_modified_ratio` | 噪声修改像素占总像素的比例上限（(0, 1]），小图按上限自动缩减；超出范围的值会停用噪声策略 | 0.001（0.1%） |
+
+**编码参数**（重新编码始终使用原格式）
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `media_randomizer.jpeg_quality` | JPEG 质量（1~100），固定 4:4:4 采样 | 95 |
+| `media_randomizer.webp_quality` | 有损 WebP 质量（1~100）；无损 WebP 始终保持无损编码 | 95 |
+| `media_randomizer.png_compress_level` | PNG 压缩级别（0~9） | 6 |
 
 六种策略的含义：
 
